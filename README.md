@@ -28,6 +28,12 @@ The project is live and accessible via the following domains:
 
 ## ✨ Key Features
 
+<div align="center">
+  <a href="https://git.io/typing-svg">
+    <img src="https://readme-typing-svg.demolab.com?font=Inter&weight=700&size=26&duration=3000&pause=1000&color=10B981&center=true&vCenter=true&width=800&height=80&lines=%F0%9F%A4%96+Dynamic+AI-Powered+Mock+Interviews;%F0%9F%93%84+Smart+PDF+Resume+Parsing;%F0%9F%92%8E+Premium+Glassy+Emerald+UI;%F0%9F%93%8A+Detailed+DNA+Performance+Analytics;%F0%9F%94%92+Secure+Supabase+Authentication" alt="Typing SVG" />
+  </a>
+</div>
+
 | Feature | Description |
 |---|---|
 | 🤖 **AI-Powered Interviews** | Dynamic, multi-round technical and behavioral interviews driven by Groq & Gemini AI. |
