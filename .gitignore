@@ -42,7 +42,6 @@ next-env.d.ts
 
 # project specific — do not push
 /scratch/
-/public/videos/
 project_structure.txt
 YAT_AI_Problem_Statement.docx
 YAT_AI_Problem_Statement_Document.docx
