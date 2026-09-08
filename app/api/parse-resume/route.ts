@@ -1,0 +1,384 @@
+// IMPORTANT: Must run on Node.js runtime, NOT Edge, for pdf-parse to work.
+export const runtime = "nodejs";
+
+
+import { NextResponse } from 'next/server';
+import { callAI } from '@/lib/ai';
+import { createClient } from '@/lib/supabase-server';
+
+
+/**
+ * Uses the CommonJS require() pattern for pdf-parse which is a CJS-only package.
+ * This avoids the "module not found" crash that occurs with ESM imports on Next.js.
+ */
+async function parsePDFBuffer(buffer: Buffer): Promise<string> {
+  // 1. Try pdf-parse library
+  try {
+    const pdfParse = require('pdf-parse');
+    const pdfData = await pdfParse(buffer);
+    if (pdfData && pdfData.text && pdfData.text.trim().length > 20) {
+      return pdfData.text;
+    }
+  } catch (err: any) {
+    console.warn('pdf-parse failed, attempting pdfjs-dist fallback:', err?.message);
+  }
+
+  // 2. Fallback to pdfjs-dist using Uint8Array
+  try {
+    const pdfjsLib = require('pdfjs-dist/legacy/build/pdf');
+    const uint8Array = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    const pdf = await pdfjsLib.getDocument({ data: uint8Array }).promise;
+    let text = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      text += textContent.items.map((item: any) => item.str).join(' ') + '\n';
+    }
+    return text;
+  } catch (err: any) {
+    console.warn('pdfjs-dist fallback failed:', err?.message);
+  }
+
+  return '';
+}
+
+export async function POST(req: Request) {
+  try {
+    const formData = await req.formData();
+    const file = formData.get('file') as File | null;
+
+    // ── Manual Entry fallback path ───────────────────────────────────────
+    // When no file is sent, the client can send manual grade fields instead.
+    const manualName = formData.get('manual_name') as string | null;
+    if (!file && manualName) {
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+
+      const manualData = {
+        personalInfo: {
+          name: manualName,
+          email: formData.get('manual_email') as string || '',
+          phone: '', location: '', linkedin: null, github: null, portfolio: null
+        },
+        summary: null,
+        skills: { technical: [], soft: [], tools: [], languages: [] },
+        experience: [],
+        education: [
+          {
+            degree: formData.get('manual_degree') as string || '',
+            institution: '',
+            year: '',
+            percentage_or_cgpa: formData.get('manual_cgpa') as string || null,
+            relevant_coursework: []
+          }
+        ],
+        projects: [],
+        certifications: [],
+        achievements: [],
+        totalYearsExperience: 0,
+        primaryTechStack: [],
+        detectedIndustry: (formData.get('manual_degree') as string || 'Professional') + ' Professional',
+        // Academic grades from manual entry
+        extracted: {
+          tenth_percent: parseFloat(formData.get('manual_10th') as string || '0') || null,
+          twelfth_percent: parseFloat(formData.get('manual_12th') as string || '0') || null,
+          grad_cgpa: parseFloat(formData.get('manual_cgpa') as string || '0') || null,
+          branch: formData.get('manual_branch') as string || null,
+        }
+      };
+
+      if (user) {
+        const { extracted } = manualData;
+        const updates: Record<string, any> = {};
+        if (extracted.tenth_percent) updates.tenth_percent = extracted.tenth_percent;
+        if (extracted.twelfth_percent) updates.twelfth_percent = extracted.twelfth_percent;
+        if (extracted.grad_cgpa) updates.grad_cgpa = extracted.grad_cgpa;
+        if (extracted.branch) updates.branch = extracted.branch;
+
+        if (Object.keys(updates).length > 0) {
+          await supabase.from('profiles').update(updates).eq('id', user.id);
+        }
+      }
+
+      return NextResponse.json({ success: true, data: manualData, source: 'manual' });
+    }
+
+   if (!file) {
+      return NextResponse.json({ success: false, error: 'No file provided', requiresManualEntry: true }, { status: 400 });
+    }
+
+    // ── Direct In-Memory PDF Parsing ─────────────────────────────────────
+    const buffer = Buffer.from(await file.arrayBuffer());
+    let text = '';
+
+    try {
+      console.log('Parsing PDF buffer in memory...');
+      text = await parsePDFBuffer(buffer);
+      console.log('PDF parsed successfully in memory.');
+    } catch (parseErr: any) {
+      console.warn('PDF parsing failed, trying text extraction fallback:', parseErr?.message);
+      try {
+        text = buffer.toString('utf-8').trim();
+      } catch (e) {
+        console.error('Text extraction fallback failed');
+      }
+    }
+
+    if (!text || text.trim().length < 50) {
+      console.warn('Extracted text too short, offering manual entry fallback');
+    }
+
+    // ── GitHub README extraction (with strict timeout) ─────────────────────
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const urls = text.match(urlRegex) || [];
+    const extractedData: string[] = [];
+
+    for (const url of urls) {
+      try {
+        if (url.includes('github.com')) {
+          const cleanUrl = url.replace(/\/$/, '');
+          const parts = cleanUrl.split('github.com/')[1]?.split('/');
+          if (parts && parts.length >= 2) {
+            const owner = parts[0];
+            const repo = parts[1]?.replace('.git', '');
+            let res = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/main/README.md`, {
+              signal: AbortSignal.timeout(2000)
+            });
+            if (!res.ok) {
+              res = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/master/README.md`, {
+                signal: AbortSignal.timeout(2000)
+              });
+            }
+            if (res.ok) {
+              const readmeText = await res.text();
+              extractedData.push(`\n--- REPOSITORY DATA: ${repo} ---\n${readmeText.substring(0, 1000)}...\n`);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn(`Skipping GitHub README fetch for ${url} (timeout or unavailable)`);
+      }
+    }
+
+    if (extractedData.length > 0) {
+      text += "\n\n=== EXTRACTED PROJECT METADATA (GITHUB READMES) ===\n" + extractedData.join("\n");
+    }
+
+    // ── Groq AI Parsing ──────────────────────────────────────────────────
+
+    // Truncate resume text to prevent request size issues with Groq
+    const maxResumeLength = 3000; // characters
+    const truncatedText = text.length > maxResumeLength 
+      ? text.substring(0, maxResumeLength) + "\n[...resume truncated...]" 
+      : text;
+
+    const prompt = `
+You are a precise resume parser AND career analyst. Extract all information from the resume below
+and return ONLY a valid JSON object. No extra text, no markdown, no explanation. Just the JSON.
+
+CRITICAL — "detectedIndustry" MUST be the EXACT job title/role the candidate is targeting, inferred
+from their degree, experience, skills, and projects. Examples:
+- E&TC/Electronics degree OR mentions 'ESP32'/'IoT' → "E&TC / Embedded Engineer"
+- CS/IT degree + coding projects → "Software Engineer"
+- MBA/Marketing courses + campaigns → "Marketing Manager"
+- Finance/Accounting degree → "Finance Analyst"
+- HR/Psychology degree → "HR Executive"
+- Mechanical Engineering → "Mechanical Engineer"
+- BBA + business projects → "Business Analyst"
+- Data Science/ML projects → "Data Scientist"
+Always provide a specific, relevant job title — NEVER leave it generic or empty.
+
+CRITICAL — "extracted" object: Extract the student's academic grades DIRECTLY from the resume text.
+- "tenth_percent": Their 10th standard percentage (look for "SSC", "10th", "Matriculation" sections)
+- "twelfth_percent": Their 12th standard percentage (look for "HSC", "12th", "Intermediate", "Diploma" sections)
+- "grad_cgpa": Their current CGPA or percentage (look for "B.E.", "B.Tech", "Engineering" sections)
+- "branch": Their engineering/academic branch e.g. "Computer Science", "Electronics", "Mechanical"
+Set to null if not found.
+
+Return this exact JSON structure:
+{
+  "personalInfo": {
+    "name": "string",
+    "email": "string",
+    "phone": "string",
+    "location": "string",
+    "linkedin": "string or null",
+    "github": "string or null",
+    "portfolio": "string or null"
+  },
+  "summary": "string or null",
+  "skills": {
+    "technical": ["string"],
+    "soft": ["string"],
+    "tools": ["string"],
+    "languages": ["string"]
+  },
+  "experience": [
+    {
+      "company": "string",
+      "role": "string",
+      "duration": "string",
+      "startDate": "string",
+      "endDate": "string or 'Present'",
+      "responsibilities": ["string"],
+      "achievements": ["string"]
+    }
+  ],
+  "education": [
+    {
+      "degree": "string",
+      "institution": "string",
+      "year": "string",
+      "percentage_or_cgpa": "string or null",
+      "relevant_coursework": ["string"]
+    }
+  ],
+  "projects": [
+    {
+      "name": "string",
+      "description": "string",
+      "technologies": ["string"],
+      "role": "string",
+      "outcome": "string or null",
+      "link": "string or null"
+    }
+  ],
+  "certifications": ["string"],
+  "achievements": ["string"],
+  "totalYearsExperience": 0,
+  "primaryTechStack": ["string"],
+  "detectedIndustry": "specific job title string — NEVER empty",
+  "extracted": {
+    "tenth_percent": null,
+    "twelfth_percent": null,
+    "grad_cgpa": null,
+    "branch": null
+  }
+}
+
+Resume text:
+${truncatedText}
+`;
+
+    const parsedJSONString = await callAI(prompt);
+    let parsedData: any;
+    try {
+      const cleaned = parsedJSONString.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
+      parsedData = JSON.parse(cleaned);
+    } catch (e) {
+      console.error('AI JSON Parse Error:', parsedJSONString);
+      throw new Error('AI returned invalid format. Please try again.');
+    }
+
+    // Ensure detectedIndustry is never empty
+    if (!parsedData.detectedIndustry || parsedData.detectedIndustry.trim() === '') {
+      parsedData.detectedIndustry =
+        parsedData.experience?.[0]?.role ||
+        (parsedData.education?.[0]?.degree?.replace('B.E.', '').replace('B.Tech', '').trim() || 'Engineering') + ' Professional';
+    }
+
+    // ── Save to Supabase ─────────────────────────────────────────────────
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (user) {
+      try {
+        // Save raw resume
+        await supabase.from('resumes').upsert({
+          user_id: user.id,
+          raw_text: text,
+          parsed_json: parsedData,
+          updated_at: new Date().toISOString()
+        });
+
+        // ── Auto-populate FULL profile from parsed resume ──────────────────
+        const extracted = parsedData.extracted || {};
+        const personal = parsedData.personalInfo || {};
+        const profileUpdates: Record<string, any> = {};
+
+        // Academic grades
+        if (extracted.tenth_percent   && !isNaN(extracted.tenth_percent))   profileUpdates.tenth_percent   = extracted.tenth_percent;
+        if (extracted.twelfth_percent && !isNaN(extracted.twelfth_percent)) profileUpdates.twelfth_percent = extracted.twelfth_percent;
+        if (extracted.grad_cgpa       && !isNaN(extracted.grad_cgpa))       profileUpdates.grad_cgpa       = extracted.grad_cgpa;
+        if (extracted.branch          && extracted.branch.trim())            profileUpdates.branch           = extracted.branch;
+
+        // Personal / contact info
+        if (personal.phone    && personal.phone.trim())    profileUpdates.phone    = personal.phone;
+        if (personal.linkedin && personal.linkedin.trim()) profileUpdates.linkedin = personal.linkedin;
+        if (personal.github   && personal.github.trim())   profileUpdates.github   = personal.github;
+
+        // Professional summary & target role
+        if (parsedData.summary          && parsedData.summary.trim())          profileUpdates.summary    = parsedData.summary;
+        if (parsedData.detectedIndustry && parsedData.detectedIndustry.trim()) profileUpdates.profession = parsedData.detectedIndustry;
+
+        // Skills — merge all categories into a flat array, deduplicated
+        const allSkills: string[] = [
+          ...(parsedData.skills?.technical  || []),
+          ...(parsedData.skills?.tools      || []),
+          ...(parsedData.skills?.languages  || []),
+          ...(parsedData.skills?.soft       || []),
+        ].map((s: string) => s.trim()).filter(Boolean);
+        if (allSkills.length > 0) {
+          profileUpdates.skills = [...new Set(allSkills)];
+        }
+
+        // Experience (jsonb)
+        if (Array.isArray(parsedData.experience) && parsedData.experience.length > 0) {
+          profileUpdates.experience = parsedData.experience.map((e: any) => ({
+            company:          e.company          || '',
+            role:             e.role             || '',
+            duration:         e.duration         || '',
+            startDate:        e.startDate        || '',
+            endDate:          e.endDate          || '',
+            responsibilities: e.responsibilities || [],
+          }));
+        }
+
+        // Projects (jsonb)
+        if (Array.isArray(parsedData.projects) && parsedData.projects.length > 0) {
+          profileUpdates.projects = parsedData.projects.map((p: any) => ({
+            name:         p.name         || '',
+            description:  p.description  || '',
+            technologies: p.technologies || [],
+            role:         p.role         || '',
+            outcome:      p.outcome      || null,
+            link:         p.link         || null,
+          }));
+        }
+
+        // Certifications & Achievements
+        if (Array.isArray(parsedData.certifications) && parsedData.certifications.length > 0) {
+          profileUpdates.certifications = parsedData.certifications;
+        }
+        if (Array.isArray(parsedData.achievements) && parsedData.achievements.length > 0) {
+          profileUpdates.achievements = parsedData.achievements;
+        }
+
+        if (Object.keys(profileUpdates).length > 0) {
+          console.log('Auto-populating full profile from resume:', Object.keys(profileUpdates));
+          await supabase.from('profiles').update(profileUpdates).eq('id', user.id);
+        }
+      } catch (dbError) {
+        console.error('Supabase Resume Save Error:', dbError);
+        // Non-fatal — continue even if DB save fails
+      }
+    }
+
+    return NextResponse.json({ success: true, data: parsedData, source: 'pdf' });
+
+ } catch (error: any) {
+    console.error('Global Resume Parse API Error:', error);
+
+    // Handle Groq request size errors gracefully
+    const is413Error = error?.message?.includes('413') || error?.message?.includes('Request Entity Too Large');
+    const isPdfError = error?.message?.toLowerCase().includes('pdf') || error?.message?.toLowerCase().includes('parse');
+    
+    return NextResponse.json({
+      success: false,
+      error: is413Error 
+        ? 'Resume is too long. Please use a shorter resume or enter your details manually.' 
+        : error.message || 'Processing failed. Please ensure the resume contains extractable text.',
+      requiresManualEntry: is413Error || isPdfError
+    }, { status: 500 });
+  }
+}
