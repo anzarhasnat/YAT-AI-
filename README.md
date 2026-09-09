@@ -24,6 +24,28 @@ The project is live and accessible via the following domains:
 
 ---
 
+## 📖 Project Overview
+
+### Background
+Practicing for technical evaluations is a critical aspect of computer science education. However, students often face difficulty assessing their readiness because traditional practice methods rely on static text quizzes or unassisted self-study. Students rarely get real-time feedback on their code efficiency, problem-solving logic, or resume project explanations. An automated, intelligent mock evaluation platform allows students to independently test their technical knowledge, track performance metrics, and systematically strengthen weak domain areas prior to real-world technical assessments.
+
+### Problem Definition
+Existing student self-preparation tools are unassisted, fragmented, and lack comprehensive multi-dimensional analysis. The core challenges faced by students include:
+- **Fragmented Practice Environments:** Students must switch between multiple websites to practice aptitude questions, technical theory, coding problems, and resume review separately.
+- **Generic, Non-Personalized Questions:** Standard preparation platforms evaluate candidates using fixed question banks without tailoring questions to the student's specific resume, skills, or projects.
+- **Lack of Detailed Diagnostic Telemetry:** Traditional quizzes provide simple total scores without giving detailed feedback on code complexity, technical reasoning, or domain mastery.
+
+### Project Objective
+To create a unified, AI-driven platform that offers personalized, real-time mock interviews, providing students with actionable, detailed feedback on their technical and behavioral performance based on their unique profiles.
+
+### Architecture
+*A robust, scalable architecture built on Next.js, powered by Supabase for secure data management, and integrated with advanced AI models (Groq & Gemini) for dynamic interaction.*
+
+### Project Status
+🚧 **Currently under development**
+
+---
+
 ## ✨ Key Features
 
 <div align="center">
