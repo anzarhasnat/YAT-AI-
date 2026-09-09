@@ -21,8 +21,6 @@
 The project is live and accessible via the following domains:
 
 - **Primary URL**: [yat-ai.vercel.app](https://yat-ai.vercel.app/)
-- **Git Branch URL**: [yat-ai-git-main-anzarhasnat.vercel.app](https://yat-ai-git-main-anzarhasnat.vercel.app/)
-- **Deployment URL**: [yat-2t7rh5999-anzarhasnat.vercel.app](https://yat-2t7rh5999-anzarhasnat.vercel.app/)
 
 ---
 
