@@ -2,22 +2,31 @@
 
 import { LogOut } from "lucide-react";
 import { createBrowserClient } from "@supabase/ssr";
+import { useRouter } from "next/navigation";
 
 export default function LogoutButton() {
+    const router = useRouter();
+
     const handleLogout = async () => {
-        const supabase = createBrowserClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-        );
+        try {
+            const supabase = createBrowserClient(
+                process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+                process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
+            );
 
-        // Clear the Supabase session from cookies/localStorage
-        await supabase.auth.signOut();
-        sessionStorage.clear();
-        localStorage.clear();
+            // Clear the Supabase session from cookies/localStorage
+            await supabase.auth.signOut();
+        } catch (error) {
+            console.error("Logout error:", error);
+        } finally {
+            sessionStorage.clear();
+            localStorage.clear();
 
-        // Nuclear option: full page reload to /login — clears ALL React state,
-        // JS memory, and prevents the browser back-button ghost session
-        window.location.href = "/";
+            // Use Next.js router to navigate back to the landing page
+            router.push("/");
+            // Refresh to ensure server components see the auth change
+            router.refresh();
+        }
     };
 
     return (
