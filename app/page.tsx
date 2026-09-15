@@ -16,7 +16,7 @@ export default function LandingPage() {
     <div className="min-h-screen font-normal cursor-none overflow-x-hidden transition-colors duration-500 text-[#0f172a] dark:text-[#f0fdf4]">
       <CustomCursor />
       <WelcomeScreen />
-      
+
       {/* ─── 3D BACKGROUND (21st.dev Particles) ─── */}
       <ParticlesBackground />
 
@@ -47,7 +47,7 @@ export default function LandingPage() {
 
           <div className="flex gap-4 items-center">
             <ThemeToggle />
-            
+
             <Link
               href="/login"
               className="hidden md:inline px-6 py-2 rounded-full border border-gray-300 dark:border-[#10b981]/50 text-gray-700 dark:text-[#10b981] hover:bg-gray-100 dark:hover:bg-[#10b981]/10 transition duration-300 cursor-none tracking-wide"
@@ -55,7 +55,7 @@ export default function LandingPage() {
             >
               Log In
             </Link>
-            
+
             <Link
               href="/signup"
               className="hidden md:inline px-6 py-2 rounded-full bg-[#10b981] text-white hover:bg-[#059669] transition duration-300 cursor-none tracking-wide shadow-md"
@@ -63,7 +63,7 @@ export default function LandingPage() {
             >
               Sign Up
             </Link>
-            
+
             <button
               className="md:hidden text-gray-800 dark:text-[#10b981] cursor-none"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -124,10 +124,10 @@ export default function LandingPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 3.6 }}
           >
-            Progress through five comprehensive stages and discover exactly what you know. 
+            Progress through five comprehensive stages and discover exactly what you know.
             Receive a detailed DNA analytics report on your interview performance in thirty minutes.
           </motion.p>
-          
+
           <motion.div
             className="flex flex-col md:flex-row gap-6 justify-center"
             initial={{ opacity: 0, y: 20 }}
@@ -211,7 +211,7 @@ export default function LandingPage() {
             <p className="text-lg text-gray-600 dark:text-[#86efac] font-normal leading-relaxed mb-8">
               We don't just ask questions; we deeply analyze your answers. Powered by advanced AI models (Groq & Gemini), YAT AI breaks down your logic in real-time to provide the ultimate performance report.
             </p>
-            
+
             <div className="space-y-8">
               <div className="flex gap-4">
                 <div className="w-12 h-12 rounded-xl bg-[#10b981]/10 border border-[#10b981]/30 flex items-center justify-center shrink-0">
@@ -244,7 +244,7 @@ export default function LandingPage() {
             data-cursor-magnify="true"
           >
             <div className="text-sm tracking-widest uppercase text-gray-500 dark:text-[#34d399] mb-8 font-medium">Sample DNA Result</div>
-            
+
             <div className="space-y-6">
               <div className="p-4 rounded-xl border border-gray-100 dark:border-[#10b981]/20 bg-gray-50 dark:bg-[#10b981]/5">
                 <div className="flex justify-between text-gray-700 dark:text-[#86efac] mb-2 font-medium text-sm">
@@ -252,10 +252,10 @@ export default function LandingPage() {
                   <span className="text-emerald-600 dark:text-emerald-400">92/100</span>
                 </div>
                 <div className="w-full h-3 bg-gray-200 dark:bg-[#030806] rounded-full overflow-hidden border border-gray-300 dark:border-emerald-900/50">
-                  <motion.div 
-                    className="h-full bg-gradient-to-r from-[#10b981] to-[#34d399] shadow-[0_0_10px_rgba(52,211,153,0.5)]" 
-                    initial={{ width: 0 }} 
-                    whileInView={{ width: "92%" }} 
+                  <motion.div
+                    className="h-full bg-gradient-to-r from-[#10b981] to-[#34d399] shadow-[0_0_10px_rgba(52,211,153,0.5)]"
+                    initial={{ width: 0 }}
+                    whileInView={{ width: "92%" }}
                     transition={{ duration: 1.5, delay: 0.5 }}
                   />
                 </div>
@@ -267,15 +267,15 @@ export default function LandingPage() {
                   <span className="text-amber-600 dark:text-amber-400">75/100</span>
                 </div>
                 <div className="w-full h-3 bg-gray-200 dark:bg-[#030806] rounded-full overflow-hidden border border-gray-300 dark:border-emerald-900/50">
-                  <motion.div 
-                    className="h-full bg-amber-400" 
-                    initial={{ width: 0 }} 
-                    whileInView={{ width: "75%" }} 
+                  <motion.div
+                    className="h-full bg-amber-400"
+                    initial={{ width: 0 }}
+                    whileInView={{ width: "75%" }}
                     transition={{ duration: 1.5, delay: 0.7 }}
                   />
                 </div>
               </div>
-              
+
               <div className="mt-8 pt-6 border-t border-gray-200 dark:border-[#10b981]/20 flex items-start gap-4">
                 <Award className="w-8 h-8 text-[#10b981]" />
                 <div>
@@ -319,7 +319,7 @@ export default function LandingPage() {
       <footer className="border-t border-gray-200 dark:border-[#10b981]/20 bg-white dark:bg-[#030806]/80 backdrop-blur-md pt-20 pb-8 px-6 transition-colors duration-500 relative z-10">
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
-            
+
             {/* The Brand Block */}
             <div className="md:col-span-2">
               <div className="flex items-center gap-3 mb-6">
@@ -350,11 +350,11 @@ export default function LandingPage() {
             <div className="md:col-span-1">
               <h4 className="text-gray-900 dark:text-white font-semibold mb-6 uppercase tracking-wider text-sm">Contact</h4>
               <ul className="space-y-4 text-sm font-normal text-gray-600 dark:text-[#86efac]/80">
-                <li><a href="mailto:support@yatai.com" className="hover:text-[#10b981] transition cursor-none" data-cursor-magnify="true">support@yatai.com</a></li>
-                <li><a href="tel:+1800YATAI99" className="hover:text-[#10b981] transition cursor-none" data-cursor-magnify="true">+1 800 YAT-AI-99</a></li>
+                <li><a href="mailto:anzarhasnat@gmail.com" className="hover:text-[#10b981] transition cursor-none" data-cursor-magnify="true">anzarhasnat@gmail.com</a></li>
+                <li><a href="https://github.com/anzarhasnat" target="_blank" rel="noopener noreferrer" className="hover:text-[#10b981] transition cursor-none" data-cursor-magnify="true">GitHub Profile</a></li>
               </ul>
             </div>
-            
+
           </div>
 
           {/* The Utility Bar */}
