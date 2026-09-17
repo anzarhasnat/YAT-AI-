@@ -62,16 +62,21 @@ export default function SignupPage() {
       if (data?.user) {
         const { error: profileError } = await supabase
           .from("profiles")
-          .insert([
-            {
-              id: data.user.id,
-              email: formData.email,
-              full_name: formData.fullName,
-              role: "candidate",
-            },
-          ]);
+          .upsert(
+            [
+              {
+                id: data.user.id,
+                email: formData.email,
+                full_name: formData.fullName,
+                role: "candidate",
+              },
+            ],
+            { onConflict: "id" }
+          );
 
-        if (profileError) throw profileError;
+        if (profileError) {
+          console.warn("Profile upsert notice:", profileError.message);
+        }
 
         router.push("/dashboard");
       }
