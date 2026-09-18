@@ -42,10 +42,9 @@ next-env.d.ts
 
 
 /scratch/
-project_structure.txt
-YAT_AI_Problem_Statement.docx
-YAT_AI_Problem_Statement_Document.docx
+*.pdf
+*.docx
+*.txt
 .agents/
 ui-ux-pro-max-skill/
 .vscode/
-*.pdf
