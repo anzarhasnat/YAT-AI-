@@ -3,9 +3,9 @@
 import { useAuth } from "@/hooks/useAuth";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { Plus, Clock, Trophy, CheckCircle, BarChart3, ArrowUpRight, Cpu, TrendingUp, GraduationCap, AlertTriangle, Sparkles, Activity, FileText, Zap, ShieldCheck, PlayCircle } from "lucide-react";
+import { Plus, Clock, Trophy, CheckCircle, BarChart3, ArrowUpRight, Cpu, TrendingUp, GraduationCap, AlertTriangle, Sparkles, Activity, FileText, Zap, ShieldCheck, PlayCircle, Eye, ExternalLink, X, RefreshCw, Loader2 } from "lucide-react";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from "recharts";
 
@@ -23,7 +23,61 @@ export default function CandidateDashboard() {
     const firstName = profile?.full_name?.split(" ")[0] || "Candidate";
     const [interviews, setInterviews] = useState<Interview[]>([]);
     const [loadingInterviews, setLoadingInterviews] = useState(true);
+    const [savedResume, setSavedResume] = useState<any>(null);
+    const [loadingSavedResume, setLoadingSavedResume] = useState(true);
+    const [showPreviewModal, setShowPreviewModal] = useState(false);
+    const [activePreviewTab, setActivePreviewTab] = useState<'pdf' | 'skills' | 'text'>('pdf');
+    const [launchingInterview, setLaunchingInterview] = useState(false);
     const router = useRouter();
+
+    useEffect(() => {
+        const fetchSavedResume = async () => {
+            try {
+                const res = await fetch("/api/resume/saved");
+                const data = await res.json();
+                if (data.success && data.hasSavedResume) {
+                    setSavedResume(data);
+                    if (!data.fileUrl) {
+                        setActivePreviewTab('skills');
+                    }
+                }
+            } catch (e) {
+                console.warn("Could not fetch saved resume in dashboard:", e);
+            } finally {
+                setLoadingSavedResume(false);
+            }
+        };
+        fetchSavedResume();
+    }, []);
+
+    const handleLaunchSavedInterview = () => {
+        if (!savedResume?.data) {
+            router.push("/dashboard/student/new");
+            return;
+        }
+        setLaunchingInterview(true);
+        const targetRole =
+            savedResume.data.detectedIndustry ||
+            savedResume.data.experience?.[0]?.role ||
+            profile?.resume_role ||
+            "Full Stack Developer";
+
+        const setupData = {
+            role: targetRole,
+            domain: targetRole,
+            experience: "Freshers/Entry-Level",
+            pattern: "Standard",
+            mode: "practice",
+            driveRegId: null,
+            driveId: null
+        };
+
+        sessionStorage.setItem("interview_setup", JSON.stringify(setupData));
+        sessionStorage.setItem("current_interview_config", JSON.stringify({ role: targetRole }));
+        sessionStorage.setItem("parsed_resume", JSON.stringify(savedResume.data));
+
+        router.push("/interview/session/round-1");
+    };
 
     useEffect(() => {
         if (!user) return;
@@ -279,19 +333,81 @@ export default function CandidateDashboard() {
                             </span>
                         </div>
 
-                        <p className="text-xs text-emerald-200/80 leading-relaxed">
-                            {profile?.resume_role
-                                ? `Saved Target Role: "${profile.resume_role}". Uploading new PDFs updates your saved candidate telemetry.`
-                                : "Upload a PDF resume during your next interview setup to save it to your profile for 1-click loading."}
-                        </p>
+                        {loadingSavedResume ? (
+                            <div className="py-4 text-center">
+                                <p className="text-xs text-emerald-300/60 animate-pulse font-mono">Syncing saved telemetry...</p>
+                            </div>
+                        ) : savedResume ? (
+                            <div className="space-y-4">
+                                {/* File preview card */}
+                                <div className="p-4 rounded-2xl glass-emerald-subcard border border-emerald-500/30 space-y-2.5">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 shrink-0">
+                                            <FileText className="w-5 h-5" />
+                                        </div>
+                                        <div className="overflow-hidden">
+                                            <p className="text-xs font-bold text-white font-sora truncate">
+                                                {savedResume.fileName || `${profile?.full_name || 'Candidate'}_Resume.pdf`}
+                                            </p>
+                                            <p className="text-[10px] text-emerald-300/70 truncate mt-0.5">
+                                                Target: <strong className="text-emerald-300">{savedResume.data?.detectedIndustry || profile?.resume_role || 'Software Engineer'}</strong>
+                                                {savedResume.updatedAt && ` • ${new Date(savedResume.updatedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}`}
+                                            </p>
+                                        </div>
+                                    </div>
 
-                        <Link
-                            href="/dashboard/student/new"
-                            className="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-bold py-3.5 rounded-2xl transition-all text-xs shadow-[0_0_20px_rgba(16,185,129,0.25)]"
-                        >
-                            <PlayCircle className="w-4 h-4 text-slate-950" />
-                            <span>Quick Start with Saved Resume</span>
-                        </Link>
+                                    {/* Quick skills tags */}
+                                    <div className="flex flex-wrap gap-1.5 pt-1">
+                                        {(
+                                            savedResume.data?.skills?.technical?.slice(0, 4) ||
+                                            savedResume.data?.primaryTechStack?.slice(0, 4) ||
+                                            []
+                                        ).map((skill: string) => (
+                                            <span
+                                                key={skill}
+                                                className="px-2 py-0.5 rounded-md text-[10px] font-mono bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
+                                            >
+                                                {skill}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Action Buttons */}
+                                <div className="grid grid-cols-2 gap-3 pt-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPreviewModal(true)}
+                                        className="inline-flex items-center justify-center gap-1.5 glass-emerald-subcard hover:border-emerald-400 text-emerald-300 font-bold py-3 px-3 rounded-2xl transition-all text-xs"
+                                    >
+                                        <Eye className="w-3.5 h-3.5 text-emerald-400" />
+                                        <span>See Preview</span>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPreviewModal(true)}
+                                        className="inline-flex items-center justify-center gap-1.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-bold py-3 px-3 rounded-2xl transition-all text-xs shadow-[0_0_20px_rgba(16,185,129,0.25)]"
+                                    >
+                                        <PlayCircle className="w-3.5 h-3.5 text-slate-950" />
+                                        <span>Quick Start</span>
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                <p className="text-xs text-emerald-200/80 leading-relaxed">
+                                    Upload a PDF resume to save it to your candidate vault for instant 1-click interview calibration.
+                                </p>
+                                <Link
+                                    href="/dashboard/student/new"
+                                    className="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-bold py-3.5 rounded-2xl transition-all text-xs shadow-[0_0_20px_rgba(16,185,129,0.25)]"
+                                >
+                                    <Plus className="w-4 h-4 text-slate-950 stroke-[2.5]" />
+                                    <span>Upload Resume PDF</span>
+                                </Link>
+                            </div>
+                        )}
                     </div>
 
                     {/* Skill Genome Matrix Cloud */}
@@ -363,6 +479,219 @@ export default function CandidateDashboard() {
                     </div>
                 </div>
             </div>
+
+            {/* Resume Preview & Verification Modal */}
+            <AnimatePresence>
+                {showPreviewModal && savedResume && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            className="relative w-full max-w-4xl glass-emerald-card border border-emerald-500/40 rounded-3xl p-6 md:p-8 space-y-6 shadow-[0_0_60px_rgba(16,185,129,0.25)] my-6 max-h-[90vh] flex flex-col"
+                        >
+                            {/* Modal Header */}
+                            <div className="flex items-center justify-between border-b border-emerald-500/20 pb-4 shrink-0">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                                        <FileText className="w-6 h-6" />
+                                    </div>
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <h3 className="text-lg font-bold font-sora text-white">
+                                                Saved Resume Vault: Document Verification
+                                            </h3>
+                                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                                Active Telemetry
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-emerald-300/70">
+                                            Inspect your saved resume and extracted parameters before launching Round 1.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPreviewModal(false)}
+                                    className="p-2 rounded-xl text-emerald-300/70 hover:text-white hover:bg-emerald-500/10 transition-colors"
+                                    aria-label="Close"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+
+                            {/* Meta info ribbon */}
+                            <div className="p-4 rounded-2xl glass-emerald-subcard border border-emerald-500/20 flex flex-wrap items-center justify-between gap-4 shrink-0">
+                                <div className="flex items-center gap-3">
+                                    <span className="px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                        PDF
+                                    </span>
+                                    <div>
+                                        <p className="text-sm font-bold text-white font-sora">
+                                            {savedResume.fileName || `${profile?.full_name || 'Candidate'}_Resume.pdf`}
+                                        </p>
+                                        <p className="text-[11px] text-emerald-300/60 mt-0.5">
+                                            Target Domain: <strong className="text-emerald-300">{savedResume.data?.detectedIndustry || profile?.resume_role || 'Software Engineer'}</strong>
+                                            {savedResume.updatedAt && ` • Synced: ${new Date(savedResume.updatedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                    {savedResume.fileUrl && (
+                                        <a
+                                            href={savedResume.fileUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 transition-colors"
+                                        >
+                                            <ExternalLink className="w-4 h-4" />
+                                            <span>Open PDF in New Tab</span>
+                                        </a>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Tabs selector */}
+                            <div className="flex items-center gap-2 border-b border-emerald-500/20 pb-2 shrink-0">
+                                {savedResume.fileUrl && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setActivePreviewTab('pdf')}
+                                        className={`px-4 py-2 rounded-xl text-xs font-bold font-mono transition-all flex items-center gap-2 ${
+                                            activePreviewTab === 'pdf'
+                                                ? 'bg-emerald-500 text-slate-950 shadow-md'
+                                                : 'text-emerald-300/70 hover:text-white hover:bg-emerald-500/10'
+                                        }`}
+                                    >
+                                        <Eye className="w-3.5 h-3.5" /> PDF Document
+                                    </button>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={() => setActivePreviewTab('skills')}
+                                    className={`px-4 py-2 rounded-xl text-xs font-bold font-mono transition-all flex items-center gap-2 ${
+                                        activePreviewTab === 'skills'
+                                            ? 'bg-emerald-500 text-slate-950 shadow-md'
+                                            : 'text-emerald-300/70 hover:text-white hover:bg-emerald-500/10'
+                                    }`}
+                                >
+                                    <Zap className="w-3.5 h-3.5" /> Extracted Skills & Telemetry
+                                </button>
+                                {savedResume.rawText && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setActivePreviewTab('text')}
+                                        className={`px-4 py-2 rounded-xl text-xs font-bold font-mono transition-all flex items-center gap-2 ${
+                                            activePreviewTab === 'text'
+                                                ? 'bg-emerald-500 text-slate-950 shadow-md'
+                                                : 'text-emerald-300/70 hover:text-white hover:bg-emerald-500/10'
+                                        }`}
+                                    >
+                                        <FileText className="w-3.5 h-3.5" /> Raw Document Text
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Tab Content Body */}
+                            <div className="flex-1 overflow-y-auto pr-1 min-h-[350px]">
+                                {activePreviewTab === 'pdf' && savedResume.fileUrl && (
+                                    <div className="w-full h-[450px] rounded-2xl overflow-hidden border border-emerald-500/30 bg-slate-950 shadow-inner">
+                                        <iframe
+                                            src={`${savedResume.fileUrl}#toolbar=0`}
+                                            className="w-full h-full"
+                                            title="Resume PDF Preview"
+                                        />
+                                    </div>
+                                )}
+
+                                {activePreviewTab === 'skills' && (
+                                    <div className="space-y-4 p-1">
+                                        {/* Candidate Summary */}
+                                        {savedResume.data?.summary && (
+                                            <div className="p-4 rounded-2xl glass-emerald-subcard border border-emerald-500/20 space-y-1.5">
+                                                <p className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-wider">Professional Summary</p>
+                                                <p className="text-xs text-emerald-100/90 leading-relaxed">{savedResume.data.summary}</p>
+                                            </div>
+                                        )}
+
+                                        {/* Technical Skills */}
+                                        <div className="p-4 rounded-2xl glass-emerald-subcard border border-emerald-500/20 space-y-3">
+                                            <p className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-wider">Extracted Technical Skills</p>
+                                            <div className="flex flex-wrap gap-2">
+                                                {(
+                                                    savedResume.data?.skills?.technical?.length
+                                                        ? savedResume.data.skills.technical
+                                                        : (savedResume.data?.primaryTechStack || [])
+                                                ).map((s: string) => (
+                                                    <span key={s} className="px-3 py-1 bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-xs font-mono rounded-lg">
+                                                        {s}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Identified Projects */}
+                                        {Array.isArray(savedResume.data?.projects) && savedResume.data.projects.length > 0 && (
+                                            <div className="p-4 rounded-2xl glass-emerald-subcard border border-emerald-500/20 space-y-3">
+                                                <p className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-wider">Identified Projects</p>
+                                                <div className="space-y-2">
+                                                    {savedResume.data.projects.map((p: any, idx: number) => (
+                                                        <div key={idx} className="p-3 bg-emerald-950/40 rounded-xl border border-emerald-500/20">
+                                                            <p className="text-xs font-bold text-white font-sora">{p.name || p.title || `Project ${idx + 1}`}</p>
+                                                            {p.techStack && <p className="text-[10px] text-emerald-400 font-mono mt-0.5">{Array.isArray(p.techStack) ? p.techStack.join(', ') : p.techStack}</p>}
+                                                            {p.description && <p className="text-[11px] text-emerald-200/70 mt-1">{p.description}</p>}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {activePreviewTab === 'text' && (
+                                    <div className="p-4 rounded-2xl glass-emerald-subcard border border-emerald-500/20 bg-slate-950/60">
+                                        <pre className="text-xs text-emerald-200/90 whitespace-pre-wrap font-mono leading-relaxed select-text">
+                                            {savedResume.rawText || 'No raw text saved for this resume.'}
+                                        </pre>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Modal Footer Controls */}
+                            <div className="border-t border-emerald-500/20 pt-4 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+                                <Link
+                                    href="/dashboard/student/new"
+                                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-500/30 text-emerald-300 text-xs font-bold transition-all"
+                                >
+                                    <RefreshCw className="w-4 h-4 text-emerald-400" />
+                                    <span>🔄 Upload Newer Resume</span>
+                                </Link>
+
+                                <button
+                                    type="button"
+                                    onClick={handleLaunchSavedInterview}
+                                    disabled={launchingInterview}
+                                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-400 text-slate-950 font-black px-8 py-3.5 rounded-2xl transition-all shadow-[0_0_25px_rgba(16,185,129,0.35)] text-xs font-sora active:scale-95 disabled:opacity-50"
+                                >
+                                    {launchingInterview ? (
+                                        <>
+                                            <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
+                                            <span>Calibrating Round 1...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <PlayCircle className="w-4 h-4 stroke-[2.5]" />
+                                            <span>Start Interview with this Resume (Round 1) →</span>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }

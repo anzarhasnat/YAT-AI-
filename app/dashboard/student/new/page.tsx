@@ -42,11 +42,37 @@ function InterviewSetupContent() {
     const [showSavePrompt, setShowSavePrompt] = useState(false);
     const [pendingParsedData, setPendingParsedData] = useState<any>(null);
     const [savingToProfile, setSavingToProfile] = useState(false);
+    const [savedResumeInfo, setSavedResumeInfo] = useState<any>(null);
+    const [showUploader, setShowUploader] = useState(false);
     const [formData, setFormData] = useState({
         role: driveRole || ""
     });
 
     const router = useRouter();
+
+    // Load saved resume from vault
+    useEffect(() => {
+        const fetchSaved = async () => {
+            if (mode === "drive") return;
+            try {
+                const res = await fetch("/api/resume/saved");
+                const result = await res.json();
+                if (result.success && result.hasSavedResume && result.data) {
+                    setSavedResumeInfo(result);
+                    setUsingSavedResume(true);
+                    setPendingParsedData(result.data);
+                    sessionStorage.setItem("parsed_resume", JSON.stringify(result.data));
+                    if (!formData.role) {
+                        const detected = result.data.detectedIndustry || result.data.experience?.[0]?.role || '';
+                        if (detected) setFormData({ role: detected });
+                    }
+                }
+            } catch (e) {
+                console.warn("Could not fetch saved resume in studio:", e);
+            }
+        };
+        fetchSaved();
+    }, [mode]);
 
     // Prevent going back to this page during a live drive
     useEffect(() => {
@@ -279,36 +305,100 @@ function InterviewSetupContent() {
                                 </span>
                             </div>
 
-                            {/* Dropzone Laser Box */}
-                            <label className="group relative block glass-emerald-dropzone rounded-2xl p-8 text-center cursor-pointer transition-all hover:border-emerald-400 hover:shadow-[0_0_35px_rgba(16,185,129,0.2)]">
-                                <input
-                                    type="file"
-                                    className="hidden"
-                                    accept=".pdf"
-                                    onChange={handleResumeUpload}
-                                    disabled={parsing}
-                                />
-                                <div className="space-y-4">
-                                    <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mx-auto group-hover:scale-110 transition-transform shadow-[0_0_20px_rgba(16,185,129,0.2)]">
-                                        {parsing ? (
-                                            <Loader2 className="w-8 h-8 animate-spin text-emerald-400" />
-                                        ) : (
-                                            <Upload className="w-8 h-8 text-emerald-400" />
-                                        )}
+                            {/* Saved Resume Active Banner or Dropzone */}
+                            {usingSavedResume && savedResumeInfo && !showUploader ? (
+                                <div className="glass-emerald-card border border-emerald-500/40 rounded-2xl p-6 space-y-4 shadow-[0_0_25px_rgba(16,185,129,0.15)]">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                                                <FileText className="w-6 h-6" />
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <h4 className="text-sm font-bold text-white font-sora truncate max-w-[200px]">
+                                                        {savedResumeInfo.fileName || `${profile?.full_name || 'Candidate'}_Resume.pdf`}
+                                                    </h4>
+                                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                                        Loaded
+                                                    </span>
+                                                </div>
+                                                <p className="text-xs text-emerald-300/70 mt-0.5">
+                                                    {savedResumeInfo.data?.personalInfo?.name || profile?.full_name || 'Candidate'} · {savedResumeInfo.data?.detectedIndustry || profile?.resume_role || 'Software Engineer'}
+                                                </p>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <p className="text-sm font-bold text-white font-sora">
-                                            {parsing ? "Parsing PDF Telemetry..." : "Drop PDF Resume Here"}
-                                        </p>
-                                        <p className="text-xs text-emerald-300/60 mt-1">
-                                            {parsing ? "Extracting skills, projects, and target role..." : "Click or drag to upload candidate resume"}
-                                        </p>
-                                    </div>
-                                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-extrabold text-xs shadow-md">
-                                        {parsing ? "Processing..." : "Select Resume PDF"}
+
+                                    {savedResumeInfo.fileUrl && (
+                                        <div className="pt-2">
+                                            <a
+                                                href={savedResumeInfo.fileUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 underline font-mono"
+                                            >
+                                                <span>🔗 Open PDF in New Tab</span>
+                                            </a>
+                                        </div>
+                                    )}
+
+                                    <div className="pt-2 border-t border-emerald-500/20 flex items-center justify-between gap-2">
+                                        <span className="text-[10px] text-emerald-400/70 font-mono">
+                                            Vault Telemetry Active
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowUploader(true)}
+                                            className="px-3 py-1.5 bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-500/30 hover:border-emerald-400 text-emerald-300 rounded-xl text-xs font-semibold transition-all"
+                                        >
+                                            🔄 Upload Different Resume
+                                        </button>
                                     </div>
                                 </div>
-                            </label>
+                            ) : (
+                                <label className="group relative block glass-emerald-dropzone rounded-2xl p-8 text-center cursor-pointer transition-all hover:border-emerald-400 hover:shadow-[0_0_35px_rgba(16,185,129,0.2)]">
+                                    <input
+                                        type="file"
+                                        className="hidden"
+                                        accept=".pdf"
+                                        onChange={handleResumeUpload}
+                                        disabled={parsing}
+                                    />
+                                    <div className="space-y-4">
+                                        <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mx-auto group-hover:scale-110 transition-transform shadow-[0_0_20px_rgba(16,185,129,0.2)]">
+                                            {parsing ? (
+                                                <Loader2 className="w-8 h-8 animate-spin text-emerald-400" />
+                                            ) : (
+                                                <Upload className="w-8 h-8 text-emerald-400" />
+                                            )}
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-bold text-white font-sora">
+                                                {parsing ? "Parsing PDF Telemetry..." : "Drop PDF Resume Here"}
+                                            </p>
+                                            <p className="text-xs text-emerald-300/60 mt-1">
+                                                {parsing ? "Extracting skills, projects, and target role..." : "Click or drag to upload candidate resume"}
+                                            </p>
+                                        </div>
+                                        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-extrabold text-xs shadow-md">
+                                            {parsing ? "Processing..." : "Select Resume PDF"}
+                                        </div>
+                                    </div>
+                                    {showUploader && savedResumeInfo && (
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                setShowUploader(false);
+                                            }}
+                                            className="mt-4 text-[11px] text-emerald-400 hover:underline block mx-auto"
+                                        >
+                                            ← Keep using currently saved resume
+                                        </button>
+                                    )}
+                                </label>
+                            )}
 
                             {parseStatus && (
                                 <motion.div
@@ -323,17 +413,6 @@ function InterviewSetupContent() {
                                     {parseStatus.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" /> : <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />}
                                     <span className="leading-relaxed">{parseStatus.text}</span>
                                 </motion.div>
-                            )}
-
-                            {/* Using Saved Resume Alert */}
-                            {usingSavedResume && (
-                                <div className="p-4 bg-emerald-950/40 border border-emerald-500/30 rounded-2xl flex items-center justify-between text-xs text-emerald-300">
-                                    <div className="flex items-center gap-2">
-                                        <FileText className="w-4 h-4 text-emerald-400" />
-                                        <span>Using Profile Saved Resume Telemetry</span>
-                                    </div>
-                                    <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">Loaded</span>
-                                </div>
                             )}
 
                             {/* Display Parsed Stacks if available */}

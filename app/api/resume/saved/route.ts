@@ -29,10 +29,15 @@ export async function GET() {
       return NextResponse.json({ success: true, hasSavedResume: false, data: null });
     }
 
+    const parsed = data.parsed_json;
     return NextResponse.json({
       success: true,
       hasSavedResume: true,
-      data: data.parsed_json,
+      data: parsed,
+      fileName: parsed?.fileName || null,
+      fileUrl: parsed?.fileUrl || null,
+      fileSize: parsed?.fileSize || null,
+      rawText: data.raw_text || '',
       updatedAt: data.updated_at
     });
   } catch (err: any) {

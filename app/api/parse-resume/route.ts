@@ -283,13 +283,45 @@ ${truncatedText}
 
     if (user) {
       try {
-        // Save raw resume
+        // 1. Upload actual PDF file to Supabase Storage 'resume' bucket
+        let publicPdfUrl = '';
+        if (file && buffer) {
+          try {
+            const sanitizedFileName = (file.name || 'resume.pdf').replace(/[^a-zA-Z0-9._-]/g, '_');
+            const storagePath = `${user.id}/${Date.now()}_${sanitizedFileName}`;
+            const { error: uploadError } = await supabase.storage
+              .from('resume')
+              .upload(storagePath, buffer, {
+                contentType: file.type || 'application/pdf',
+                upsert: true
+              });
+
+            if (!uploadError) {
+              const { data: { publicUrl } } = supabase.storage
+                .from('resume')
+                .getPublicUrl(storagePath);
+              publicPdfUrl = publicUrl;
+            } else {
+              console.warn('Storage upload notice:', uploadError.message);
+            }
+          } catch (storageErr: any) {
+            console.warn('Storage upload exception:', storageErr?.message);
+          }
+        }
+
+        // Attach file telemetry to parsedData
+        parsedData.fileName = file?.name || 'Resume.pdf';
+        parsedData.fileSize = file?.size || buffer?.length || 0;
+        parsedData.fileUrl = publicPdfUrl || '';
+        parsedData.uploadedAt = new Date().toISOString();
+
+        // 2. Save raw resume text and full JSON to resumes table
         await supabase.from('resumes').upsert({
           user_id: user.id,
           raw_text: text,
           parsed_json: parsedData,
           updated_at: new Date().toISOString()
-        });
+        }, { onConflict: 'user_id' });
 
         // ── Auto-populate FULL profile from parsed resume ──────────────────
         const extracted = parsedData.extracted || {};
