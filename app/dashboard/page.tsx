@@ -104,21 +104,32 @@ export default function CandidateDashboard() {
         : 0;
     const passedCount = interviews.filter((i: any) => (i.avg_score || 0) >= 7).length;
 
-    // Skill DNA: extract unique keywords from all interview roles
+    // Skill DNA: combine extracted skills from saved resume, profile, and completed interview roles
+    const resumeSkills: string[] = savedResume?.data?.skills?.technical || savedResume?.data?.primaryTechStack || [];
+    const profileSkills: string[] = Array.isArray(profile?.skills)
+        ? profile.skills
+        : (profile?.skills ? String(profile.skills).split(",").map((s: string) => s.trim()) : []);
+    const interviewKeywords: string[] = interviews.flatMap((i: any) =>
+        (i.role || "").split(/[\s,/&]+/).filter((w: string) => w.length > 2)
+    );
+
     const skillDNA = Array.from(new Set(
-        interviews.flatMap((i: any) =>
-            i.role.split(/[\s,/&]+/).filter((w: string) => w.length > 2)
-        )
+        [...resumeSkills, ...profileSkills, ...interviewKeywords]
+            .map((s: string) => s.trim())
+            .filter((s: string) => s.length > 1)
     )).slice(0, 16);
 
     const chartData = [...interviews]
         .slice(0, 6)
         .reverse()
-        .map((inv: any, idx: number) => ({
-            name: `Test ${idx + 1}`,
-            score: (inv.avg_score || 0) * 10,
-            role: inv.role.length > 15 ? inv.role.substring(0, 15) + "..." : inv.role
-        }));
+        .map((inv: any, idx: number) => {
+            const roleTitle = inv.role || "Practice Assessment";
+            return {
+                name: `Test ${idx + 1}`,
+                score: Math.min(100, Math.round((inv.avg_score || 0) * 10)),
+                role: roleTitle.length > 15 ? roleTitle.substring(0, 15) + "..." : roleTitle
+            };
+        });
 
     const getVerdict = (score: number) => {
         const s = score * 10;
@@ -411,16 +422,16 @@ export default function CandidateDashboard() {
                     </div>
 
                     {/* Skill Genome Matrix Cloud */}
-                    {skillDNA.length > 0 && (
-                        <div className="glass-emerald-card rounded-3xl p-7 border border-emerald-500/30 space-y-4">
-                            <div className="flex items-center justify-between">
-                                <h3 className="text-sm font-bold font-sora text-white flex items-center gap-2">
-                                    <Zap className="w-4 h-4 text-emerald-400" /> Skill Genome Matrix
-                                </h3>
-                                <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
-                                    {skillDNA.length} Verified Skills
-                                </span>
-                            </div>
+                    <div className="glass-emerald-card rounded-3xl p-7 border border-emerald-500/30 space-y-4">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-sm font-bold font-sora text-white flex items-center gap-2">
+                                <Zap className="w-4 h-4 text-emerald-400" /> Skill Genome Matrix
+                            </h3>
+                            <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
+                                {skillDNA.length > 0 ? `${skillDNA.length} Verified Skills` : 'DNA Telemetry'}
+                            </span>
+                        </div>
+                        {skillDNA.length > 0 ? (
                             <div className="flex flex-wrap gap-2">
                                 {skillDNA.map(skill => (
                                     <span
@@ -431,8 +442,14 @@ export default function CandidateDashboard() {
                                     </span>
                                 ))}
                             </div>
-                        </div>
-                    )}
+                        ) : (
+                            <div className="py-2 text-center space-y-1">
+                                <p className="text-xs text-emerald-300/60 leading-relaxed">
+                                    Upload your resume or launch Round 1 to synthesize your verified Skill DNA matrix.
+                                </p>
+                            </div>
+                        )}
+                    </div>
 
                     {/* Recent Sessions Feed */}
                     <div className="glass-emerald-card rounded-3xl p-7 border border-emerald-500/30 space-y-5">
@@ -462,7 +479,7 @@ export default function CandidateDashboard() {
                                             className="p-4 glass-emerald-subcard border border-emerald-500/20 rounded-2xl flex items-center justify-between hover:border-emerald-400 transition-all cursor-pointer group"
                                         >
                                             <div>
-                                                <h4 className="text-sm font-bold text-white group-hover:text-emerald-300 transition-colors font-sora">{inv.role}</h4>
+                                                <h4 className="text-sm font-bold text-white group-hover:text-emerald-300 transition-colors font-sora">{inv.role || "Practice Assessment"}</h4>
                                                 <p className="text-[10px] text-emerald-300/60 mt-0.5">
                                                     {new Date(inv.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
                                                 </p>

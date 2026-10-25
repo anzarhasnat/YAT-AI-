@@ -105,7 +105,7 @@ export default function MyInterviewsPage() {
                                         #{interviews.length - i}
                                     </div>
                                     <div>
-                                        <h3 className="font-bold text-lg text-white group-hover:text-emerald-300 transition-colors font-sora">{interview.role}</h3>
+                                        <h3 className="font-bold text-lg text-white group-hover:text-emerald-300 transition-colors font-sora">{interview.role || "Practice Assessment"}</h3>
                                         <p className="text-xs text-emerald-300/60 mt-0.5">
                                             {new Date(interview.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                                         </p>
