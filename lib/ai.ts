@@ -8,7 +8,8 @@ if (!geminiApiKey && !groqApiKey) {
 }
 
 const groq = new Groq({ apiKey: groqApiKey || "" });
-const GROQ_MODEL = "llama-3.3-70b-versatile";
+const GROQ_MODEL = "qwen/qwen3.8-27b";
+const GROQ_FALLBACK_MODELS = ["qwen/qwen3.8-27b", "openai/gpt-oss-120b", "openai/gpt-oss-20b"];
 
 /**
  * Call Google Gemini Flash API via direct REST endpoint
@@ -93,11 +94,15 @@ export async function callAI(prompt: string, retryCount = 0, targetModel = GROQ_
         const is404ModelError = error?.status === 404 || 
                                 error?.statusCode === 404 || 
                                 error?.message?.includes("model_not_found") || 
-                                error?.message?.includes("does not exist");
+                                error?.message?.includes("does not exist") ||
+                                error?.message?.includes("decommissioned");
 
-        if (is404ModelError && targetModel !== "groq/compound") {
-            console.warn(`Model '${targetModel}' not available on API key gateway. Falling back to 'groq/compound'...`);
-            return callAI(prompt, retryCount, "groq/compound");
+        if (is404ModelError) {
+            const nextModel = GROQ_FALLBACK_MODELS.find(m => m !== targetModel);
+            if (nextModel && retryCount < maxRetries) {
+                console.warn(`Model '${targetModel}' not available. Falling back to '${nextModel}'...`);
+                return callAI(prompt, retryCount + 1, nextModel);
+            }
         }
 
         if ((error?.status === 429 || error?.statusCode === 429) && retryCount < maxRetries) {

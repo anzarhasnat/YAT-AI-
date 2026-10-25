@@ -3,7 +3,7 @@
 import { useAuth } from "@/hooks/useAuth";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { Plus, Clock, Trophy, CheckCircle, BarChart3, ArrowUpRight, Cpu, TrendingUp, GraduationCap, AlertTriangle, Sparkles, Activity, FileText, Zap, ShieldCheck, PlayCircle, Eye, ExternalLink, X, RefreshCw, Loader2 } from "lucide-react";
+import { Plus, Clock, Trophy, CheckCircle, BarChart3, ArrowUpRight, Cpu, TrendingUp, GraduationCap, AlertTriangle, Sparkles, Activity, FileText, Zap, ShieldCheck, PlayCircle, Eye, ExternalLink, X, RefreshCw, Loader2, Upload } from "lucide-react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
@@ -539,7 +539,7 @@ export default function CandidateDashboard() {
                                 </div>
 
                                 <div className="flex items-center gap-2">
-                                    {savedResume.fileUrl && (
+                                    {savedResume.fileUrl ? (
                                         <a
                                             href={savedResume.fileUrl}
                                             target="_blank"
@@ -549,25 +549,31 @@ export default function CandidateDashboard() {
                                             <ExternalLink className="w-4 h-4" />
                                             <span>Open PDF in New Tab</span>
                                         </a>
+                                    ) : (
+                                        <Link
+                                            href="/dashboard/student/new"
+                                            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 transition-colors"
+                                        >
+                                            <Plus className="w-4 h-4" />
+                                            <span>Upload PDF to Vault</span>
+                                        </Link>
                                     )}
                                 </div>
                             </div>
 
                             {/* Tabs selector */}
                             <div className="flex items-center gap-2 border-b border-emerald-500/20 pb-2 shrink-0">
-                                {savedResume.fileUrl && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setActivePreviewTab('pdf')}
-                                        className={`px-4 py-2 rounded-xl text-xs font-bold font-mono transition-all flex items-center gap-2 ${
-                                            activePreviewTab === 'pdf'
-                                                ? 'bg-emerald-500 text-slate-950 shadow-md'
-                                                : 'text-emerald-300/70 hover:text-white hover:bg-emerald-500/10'
-                                        }`}
-                                    >
-                                        <Eye className="w-3.5 h-3.5" /> PDF Document
-                                    </button>
-                                )}
+                                <button
+                                    type="button"
+                                    onClick={() => setActivePreviewTab('pdf')}
+                                    className={`px-4 py-2 rounded-xl text-xs font-bold font-mono transition-all flex items-center gap-2 ${
+                                        activePreviewTab === 'pdf'
+                                            ? 'bg-emerald-500 text-slate-950 shadow-md'
+                                            : 'text-emerald-300/70 hover:text-white hover:bg-emerald-500/10'
+                                    }`}
+                                >
+                                    <Eye className="w-3.5 h-3.5" /> PDF Document
+                                </button>
                                 <button
                                     type="button"
                                     onClick={() => setActivePreviewTab('skills')}
@@ -596,14 +602,37 @@ export default function CandidateDashboard() {
 
                             {/* Tab Content Body */}
                             <div className="flex-1 overflow-y-auto pr-1 min-h-[350px]">
-                                {activePreviewTab === 'pdf' && savedResume.fileUrl && (
-                                    <div className="w-full h-[450px] rounded-2xl overflow-hidden border border-emerald-500/30 bg-slate-950 shadow-inner">
-                                        <iframe
-                                            src={`${savedResume.fileUrl}#toolbar=0`}
-                                            className="w-full h-full"
-                                            title="Resume PDF Preview"
-                                        />
-                                    </div>
+                                {activePreviewTab === 'pdf' && (
+                                    savedResume.fileUrl ? (
+                                        <div className="w-full h-[450px] rounded-2xl overflow-hidden border border-emerald-500/30 bg-slate-950 shadow-inner">
+                                            <iframe
+                                                src={`${savedResume.fileUrl}#toolbar=0`}
+                                                className="w-full h-full"
+                                                title="Resume PDF Preview"
+                                            />
+                                        </div>
+                                    ) : (
+                                        <div className="w-full h-[380px] rounded-2xl border border-dashed border-emerald-500/30 bg-emerald-950/20 flex flex-col items-center justify-center p-8 text-center space-y-4">
+                                            <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                                                <FileText className="w-8 h-8" />
+                                            </div>
+                                            <div className="max-w-md space-y-1">
+                                                <h4 className="text-base font-bold text-white font-sora">
+                                                    No Cloud PDF Attached to Current Record
+                                                </h4>
+                                                <p className="text-xs text-emerald-300/70 leading-relaxed">
+                                                    This saved resume was created before PDF cloud archiving was enabled. Upload your PDF file in the Studio to view its pages directly here anytime and enable instant 1-click launch!
+                                                </p>
+                                            </div>
+                                            <Link
+                                                href="/dashboard/student/new"
+                                                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-400 text-slate-950 font-black text-xs shadow-lg hover:shadow-emerald-500/20 transition-all font-sora"
+                                            >
+                                                <Upload className="w-4 h-4 stroke-[2.5]" />
+                                                <span>Upload Your PDF Resume Now</span>
+                                            </Link>
+                                        </div>
+                                    )
                                 )}
 
                                 {activePreviewTab === 'skills' && (
