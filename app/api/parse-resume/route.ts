@@ -128,46 +128,61 @@ export async function POST(req: Request) {
       console.warn('Extracted text too short, offering manual entry fallback');
     }
 
-    // ── GitHub README extraction (with strict timeout) ─────────────────────
+    // ── Non-blocking GitHub README extraction (parallel, strict 1.2s timeout) ─────
     const urlRegex = /(https?:\/\/[^\s]+)/g;
     const urls = text.match(urlRegex) || [];
-    const extractedData: string[] = [];
+    const repoUrls = urls
+      .filter(url => url.includes('github.com'))
+      .map(url => url.replace(/\/$/, ''))
+      .filter(cleanUrl => {
+        const parts = cleanUrl.split('github.com/')[1]?.split('/');
+        return parts && parts.length >= 2 && parts[1] && !parts[1].startsWith('?') && !['tab', 'stars', 'repositories'].includes(parts[1]);
+      })
+      .slice(0, 2);
 
-    for (const url of urls) {
+    if (repoUrls.length > 0) {
       try {
-        if (url.includes('github.com')) {
-          const cleanUrl = url.replace(/\/$/, '');
-          const parts = cleanUrl.split('github.com/')[1]?.split('/');
-          if (parts && parts.length >= 2) {
-            const owner = parts[0];
-            const repo = parts[1]?.replace('.git', '');
+        const fetchPromises = repoUrls.map(async (cleanUrl) => {
+          const parts = cleanUrl.split('github.com/')[1].split('/');
+          const owner = parts[0];
+          const repo = parts[1].replace('.git', '');
+          try {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 1200);
             let res = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/main/README.md`, {
-              signal: AbortSignal.timeout(2000)
-            });
-            if (!res.ok) {
+              signal: controller.signal
+            }).catch(() => null);
+            if (!res || !res.ok) {
               res = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/master/README.md`, {
-                signal: AbortSignal.timeout(2000)
-              });
+                signal: controller.signal
+              }).catch(() => null);
             }
-            if (res.ok) {
+            clearTimeout(timer);
+            if (res && res.ok) {
               const readmeText = await res.text();
-              extractedData.push(`\n--- REPOSITORY DATA: ${repo} ---\n${readmeText.substring(0, 1000)}...\n`);
+              return `\n--- REPOSITORY DATA: ${repo} ---\n${readmeText.substring(0, 800)}...\n`;
             }
-          }
+          } catch {}
+          return '';
+        });
+
+        const results = await Promise.allSettled(fetchPromises);
+        const validReadmeData = results
+          .filter(r => r.status === 'fulfilled' && (r as PromiseFulfilledResult<string>).value)
+          .map(r => (r as PromiseFulfilledResult<string>).value);
+
+        if (validReadmeData.length > 0) {
+          text += "\n\n=== EXTRACTED PROJECT METADATA (GITHUB READMES) ===\n" + validReadmeData.join("\n");
         }
       } catch (e) {
-        console.warn(`Skipping GitHub README fetch for ${url} (timeout or unavailable)`);
+        // Non-blocking
       }
-    }
-
-    if (extractedData.length > 0) {
-      text += "\n\n=== EXTRACTED PROJECT METADATA (GITHUB READMES) ===\n" + extractedData.join("\n");
     }
 
     // ── Groq AI Parsing ──────────────────────────────────────────────────
 
     // Truncate resume text to prevent request size issues with Groq
-    const maxResumeLength = 3000; // characters
+    const maxResumeLength = 6500; // characters
     const truncatedText = text.length > maxResumeLength 
       ? text.substring(0, maxResumeLength) + "\n[...resume truncated...]" 
       : text;

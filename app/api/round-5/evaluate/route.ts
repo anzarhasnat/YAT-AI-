@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { callAI } from '@/lib/ai';
+import { createClient } from '@/lib/supabase-server';
 
 export async function POST(req: Request) {
   try {

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/hooks/useAuth";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     Plus, X, Loader2, CheckCircle2, Cpu, User, Pencil, Save,
@@ -140,9 +141,28 @@ function TagCloud({ tags, onRemove, onAdd, placeholder }: {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ProfilePage() {
-    const [loading, setLoading] = useState(true);
-    const [profile, setProfile] = useState<FullProfile>(EMPTY_PROFILE);
-    const [userId, setUserId] = useState<string | null>(null);
+    const { user: authUser, profile: authProfile, mutateProfile } = useAuth();
+    const [userId, setUserId] = useState<string | null>(authUser?.id || null);
+    const [loading, setLoading] = useState<boolean>(!authProfile);
+    const [profile, setProfile] = useState<FullProfile>(() => {
+        if (authProfile) {
+            return {
+                full_name: authProfile.full_name || "",
+                email: authProfile.email || "",
+                phone: authProfile.phone || "",
+                linkedin: authProfile.linkedin || "",
+                github: authProfile.github || "",
+                summary: authProfile.summary || "",
+                profession: authProfile.profession || "",
+                skills: authProfile.skills || [],
+                experience: authProfile.experience || [],
+                projects: authProfile.projects || [],
+                certifications: authProfile.certifications || [],
+                achievements: authProfile.achievements || [],
+            };
+        }
+        return EMPTY_PROFILE;
+    });
 
     // Per-section save state
     const [sectionSaving, setSectionSaving] = useState<Record<string, boolean>>({});
@@ -154,39 +174,71 @@ export default function ProfilePage() {
         projects: true, certs: true,
     });
 
-    // ── Load all profile fields ───────────────────────────────────────────────
+    // ── Sync with Auth Cache & Load profile fields ─────────────────────────────
     useEffect(() => {
-        const init = async () => {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) return;
-            setUserId(user.id);
+        if (authUser) {
+            setUserId(authUser.id);
+        }
 
-            const { data } = await supabase
-                .from("profiles")
-                .select("full_name, email, phone, linkedin, github, summary, profession, skills, experience, projects, certifications, achievements")
-                .eq("id", user.id)
-                .single();
-
-            if (data) {
-                setProfile({
-                    full_name: data.full_name || "",
-                    email: data.email || "",
-                    phone: data.phone || "",
-                    linkedin: data.linkedin || "",
-                    github: data.github || "",
-                    summary: data.summary || "",
-                    profession: data.profession || "",
-                    skills: data.skills || [],
-                    experience: data.experience || [],
-                    projects: data.projects || [],
-                    certifications: data.certifications || [],
-                    achievements: data.achievements || [],
-                });
-            }
+        if (authProfile) {
+            setProfile({
+                full_name: authProfile.full_name || "",
+                email: authProfile.email || "",
+                phone: authProfile.phone || "",
+                linkedin: authProfile.linkedin || "",
+                github: authProfile.github || "",
+                summary: authProfile.summary || "",
+                profession: authProfile.profession || "",
+                skills: authProfile.skills || [],
+                experience: authProfile.experience || [],
+                projects: authProfile.projects || [],
+                certifications: authProfile.certifications || [],
+                achievements: authProfile.achievements || [],
+            });
             setLoading(false);
+            return;
+        }
+
+        const init = async () => {
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                const currentUserId = session?.user?.id;
+                if (!currentUserId) {
+                    setLoading(false);
+                    return;
+                }
+                setUserId(currentUserId);
+
+                const { data } = await supabase
+                    .from("profiles")
+                    .select("full_name, email, phone, linkedin, github, summary, profession, skills, experience, projects, certifications, achievements")
+                    .eq("id", currentUserId)
+                    .single();
+
+                if (data) {
+                    setProfile({
+                        full_name: data.full_name || "",
+                        email: data.email || "",
+                        phone: data.phone || "",
+                        linkedin: data.linkedin || "",
+                        github: data.github || "",
+                        summary: data.summary || "",
+                        profession: data.profession || "",
+                        skills: data.skills || [],
+                        experience: data.experience || [],
+                        projects: data.projects || [],
+                        certifications: data.certifications || [],
+                        achievements: data.achievements || [],
+                    });
+                }
+            } catch (err) {
+                console.warn("Failed to load profile:", err);
+            } finally {
+                setLoading(false);
+            }
         };
         init();
-    }, []);
+    }, [authUser, authProfile]);
 
     // ── Generic section save ──────────────────────────────────────────────────
     const saveSection = useCallback(async (key: string, fields: Partial<FullProfile>) => {
@@ -194,12 +246,13 @@ export default function ProfilePage() {
         setSectionSaving(s => ({ ...s, [key]: true }));
         try {
             await supabase.from("profiles").upsert({ id: userId, ...fields });
+            mutateProfile(fields);
             setSectionSaved(s => ({ ...s, [key]: true }));
             setTimeout(() => setSectionSaved(s => ({ ...s, [key]: false })), 2500);
         } finally {
             setSectionSaving(s => ({ ...s, [key]: false }));
         }
-    }, [userId]);
+    }, [userId, mutateProfile]);
 
     const toggleSection = (key: string) =>
         setOpenSections(s => ({ ...s, [key]: !s[key] }));

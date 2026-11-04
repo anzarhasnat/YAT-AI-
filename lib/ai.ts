@@ -28,11 +28,13 @@ async function callGemini(prompt: string): Promise<string> {
             const res = await fetch(url, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
+                signal: AbortSignal.timeout(12000),
                 body: JSON.stringify({
                     contents: [{ parts: [{ text: `${prompt}\n\nReturn ONLY a valid JSON object. Do not include markdown formatting or extra text.` }] }],
                     generationConfig: {
-                        temperature: 0.7,
+                        temperature: 0.3,
                         responseMimeType: "application/json",
+                        thinkingConfig: { thinkingBudget: 0 }
                     },
                 }),
             });
@@ -56,76 +58,75 @@ async function callGemini(prompt: string): Promise<string> {
 }
 
 /**
- * Centralized AI helper using Google Gemini Flash (if GEMINI_API_KEY is present) or Groq AI.
+ * Centralized AI helper using ultra-fast Groq LPU (~680ms) with fallback to Google Gemini Flash.
  */
 export async function callAI(prompt: string, retryCount = 0, targetModel = GROQ_MODEL): Promise<string> {
-    // 1. If GEMINI_API_KEY is defined, use Google Gemini Flash
-    if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim() !== "") {
-        try {
-            return await callGemini(prompt);
-        } catch (geminiError: any) {
-            console.warn("Gemini API failed, falling back to Groq:", geminiError?.message);
-        }
-    }
-
-    // 2. Fallback to Groq AI
     const maxRetries = 3;
     const strictPrompt = `${prompt}\n\nReturn ONLY a valid JSON object. Do not include markdown formatting, code blocks, or any extra text.`;
 
-    try {
-        const chatCompletion = await groq.chat.completions.create({
-            messages: [
-                {
-                    role: "user",
-                    content: strictPrompt,
-                },
-            ],
-            model: targetModel,
-            temperature: 0.7,
-            max_tokens: 8000,
-        });
+    // 1. Prioritize ultra-fast Groq LPU if API key is configured
+    if (groqApiKey && groqApiKey.trim() !== "") {
+        try {
+            const chatCompletion = await groq.chat.completions.create({
+                messages: [
+                    {
+                        role: "user",
+                        content: strictPrompt,
+                    },
+                ],
+                model: targetModel,
+                temperature: 0.3,
+                max_tokens: 8000,
+            });
 
-        const rawText = chatCompletion.choices[0]?.message?.content || "";
-        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-        const cleanText = jsonMatch ? jsonMatch[0] : rawText.replace(/```json|```/g, "").trim();
-        return cleanText;
+            const rawText = chatCompletion.choices[0]?.message?.content || "";
+            const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+            const cleanText = jsonMatch ? jsonMatch[0] : rawText.replace(/```json|```/g, "").trim();
+            if (cleanText) return cleanText;
 
-    } catch (error: any) {
-        const is404ModelError = error?.status === 404 || 
-                                error?.statusCode === 404 || 
-                                error?.message?.includes("model_not_found") || 
-                                error?.message?.includes("does not exist") ||
-                                error?.message?.includes("decommissioned");
+        } catch (error: any) {
+            const is404ModelError = error?.status === 404 || 
+                                    error?.statusCode === 404 || 
+                                    error?.message?.includes("model_not_found") || 
+                                    error?.message?.includes("does not exist") ||
+                                    error?.message?.includes("decommissioned");
 
-        if (is404ModelError) {
-            const currentIndex = GROQ_FALLBACK_MODELS.indexOf(targetModel);
-            const nextModel = currentIndex !== -1 && currentIndex + 1 < GROQ_FALLBACK_MODELS.length
-                ? GROQ_FALLBACK_MODELS[currentIndex + 1]
-                : undefined;
-            if (nextModel && retryCount < maxRetries) {
-                console.warn(`Model '${targetModel}' not available. Falling back to '${nextModel}'...`);
-                return callAI(prompt, retryCount + 1, nextModel);
+            if (is404ModelError) {
+                const currentIndex = GROQ_FALLBACK_MODELS.indexOf(targetModel);
+                const nextModel = currentIndex !== -1 && currentIndex + 1 < GROQ_FALLBACK_MODELS.length
+                    ? GROQ_FALLBACK_MODELS[currentIndex + 1]
+                    : undefined;
+                if (nextModel && retryCount < maxRetries) {
+                    console.warn(`Model '${targetModel}' not available. Falling back to '${nextModel}'...`);
+                    return callAI(prompt, retryCount + 1, nextModel);
+                }
             }
+
+            if ((error?.status === 429 || error?.statusCode === 429) && retryCount < maxRetries) {
+                const delay = Math.pow(2, retryCount) * 1000;
+                console.log(`Groq rate limit hit (attempt ${retryCount + 1}), retrying in ${delay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                return callAI(prompt, retryCount + 1, targetModel);
+            }
+
+            console.warn(`Groq execution warning (${targetModel}): ${error?.message}. Attempting Gemini Flash fallback...`);
+            // Fallback to Gemini if Groq fails
+            if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim() !== "") {
+                try {
+                    return await callGemini(prompt);
+                } catch (geminiError: any) {
+                    console.error("Gemini fallback also failed:", geminiError?.message);
+                }
+            }
+
+            throw new Error(`AI Processing failed: ${error?.message || "Unknown error"}`);
         }
-
-        if ((error?.status === 429 || error?.statusCode === 429) && retryCount < maxRetries) {
-            const delay = Math.pow(2, retryCount) * 1500;
-            console.log(`Groq rate limit hit (attempt ${retryCount + 1}), retrying in ${delay}ms...`);
-            await new Promise(resolve => setTimeout(resolve, delay));
-            return callAI(prompt, retryCount + 1, targetModel);
-        }
-
-        console.error("Groq API Error:", {
-            status: error?.status ?? error?.statusCode,
-            message: error?.message,
-            retryCount,
-            targetModel,
-        });
-
-        if (error?.status === 429 || error?.statusCode === 429) {
-            throw new Error("Groq API Rate Limit exceeded. Please wait a moment and try again.");
-        }
-
-        throw new Error(`AI Processing failed: ${error?.message || "Unknown error"}`);
     }
+
+    // 2. Fallback to Gemini Flash if Groq API key is not set
+    if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim() !== "") {
+        return await callGemini(prompt);
+    }
+
+    throw new Error("No AI API key (GROQ_API_KEY or GEMINI_API_KEY) is available.");
 }

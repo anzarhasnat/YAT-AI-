@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/hooks/useAuth";
 import { Save, BookOpen, GraduationCap, CheckCircle2, AlertCircle, Sparkles, Loader2, Award, Building2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AVAILABLE_BRANCHES } from "@/lib/constants";
