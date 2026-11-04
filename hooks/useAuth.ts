@@ -26,6 +26,16 @@ function notifyListeners() {
     listeners.forEach(fn => fn());
 }
 
+export function clearAuthCache() {
+    globalCachedUser = null;
+    globalCachedProfile = null;
+    inFlightPromise = null;
+    try {
+        localStorage.removeItem("yat_cached_profile");
+    } catch {}
+    notifyListeners();
+}
+
 export function mutateCachedProfile(partial: Partial<Profile>) {
     if (globalCachedProfile) {
         globalCachedProfile = { ...globalCachedProfile, ...partial };
@@ -130,16 +140,23 @@ export function useAuth() {
     }, [syncState]);
 
     const signOut = async () => {
-        globalCachedUser = null;
-        globalCachedProfile = null;
+        clearAuthCache();
         try {
-            localStorage.removeItem("yat_cached_profile");
+            sessionStorage.clear();
+            localStorage.clear();
+            if (typeof document !== "undefined") {
+                document.cookie.split(";").forEach((c) => {
+                    document.cookie = c
+                        .replace(/^ +/, "")
+                        .replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+                });
+            }
+            await Promise.race([
+                supabase.auth.signOut(),
+                new Promise((resolve) => setTimeout(resolve, 500))
+            ]);
         } catch {}
-        notifyListeners();
-        await supabase.auth.signOut();
-        sessionStorage.clear();
-        localStorage.clear();
-        window.location.href = "/";
+        window.location.replace("/");
     };
 
     return { user, profile, loading, signOut, mutateProfile: mutateCachedProfile };

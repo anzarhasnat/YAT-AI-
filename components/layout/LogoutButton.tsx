@@ -1,41 +1,61 @@
 "use client";
 
-import { LogOut } from "lucide-react";
-import { createBrowserClient } from "@supabase/ssr";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { LogOut, Loader2 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
+import { clearAuthCache } from "@/hooks/useAuth";
 
 export default function LogoutButton() {
-    const router = useRouter();
+    const [isLoggingOut, setIsLoggingOut] = useState(false);
 
     const handleLogout = async () => {
+        if (isLoggingOut) return;
+        setIsLoggingOut(true);
+
         try {
-            const supabase = createBrowserClient(
-                process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-                process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
-            );
+            // 1. Immediately clear in-memory caches and client storage
+            clearAuthCache();
+            try {
+                sessionStorage.clear();
+                localStorage.clear();
+            } catch {}
 
-            // Clear the Supabase session from cookies/localStorage
-            await supabase.auth.signOut();
-        } catch (error) {
-            console.error("Logout error:", error);
+            // 2. Clear all auth cookies immediately
+            if (typeof document !== "undefined") {
+                document.cookie.split(";").forEach((c) => {
+                    document.cookie = c
+                        .replace(/^ +/, "")
+                        .replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+                });
+            }
+
+            // 3. Notify Supabase with a 500ms maximum timeout so it never hangs
+            try {
+                await Promise.race([
+                    supabase.auth.signOut({ scope: "local" }),
+                    new Promise((resolve) => setTimeout(resolve, 500))
+                ]);
+            } catch (error) {
+                console.warn("Supabase signOut error:", error);
+            }
         } finally {
-            sessionStorage.clear();
-            localStorage.clear();
-
-            // Use Next.js router to navigate back to the landing page
-            router.push("/");
-            // Refresh to ensure server components see the auth change
-            router.refresh();
+            // 4. Force hard redirect to home immediately, clearing all state
+            window.location.replace("/");
         }
     };
 
     return (
         <button
             onClick={handleLogout}
-            className="flex items-center gap-3 p-3 w-full rounded-xl text-text-secondary hover:bg-accent-red/10 hover:text-accent-red transition-colors font-medium"
+            disabled={isLoggingOut}
+            className="flex items-center gap-3 p-3 w-full rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors font-medium text-sm group disabled:opacity-60 cursor-pointer"
         >
-            <LogOut className="w-5 h-5" />
-            Logout
+            {isLoggingOut ? (
+                <Loader2 className="w-5 h-5 animate-spin text-rose-400" />
+            ) : (
+                <LogOut className="w-5 h-5 group-hover:rotate-6 transition-transform" />
+            )}
+            <span>{isLoggingOut ? "Logging out..." : "Logout"}</span>
         </button>
     );
 }
