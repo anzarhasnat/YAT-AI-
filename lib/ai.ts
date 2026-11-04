@@ -98,7 +98,10 @@ export async function callAI(prompt: string, retryCount = 0, targetModel = GROQ_
                                 error?.message?.includes("decommissioned");
 
         if (is404ModelError) {
-            const nextModel = GROQ_FALLBACK_MODELS.find(m => m !== targetModel);
+            const currentIndex = GROQ_FALLBACK_MODELS.indexOf(targetModel);
+            const nextModel = currentIndex !== -1 && currentIndex + 1 < GROQ_FALLBACK_MODELS.length
+                ? GROQ_FALLBACK_MODELS[currentIndex + 1]
+                : undefined;
             if (nextModel && retryCount < maxRetries) {
                 console.warn(`Model '${targetModel}' not available. Falling back to '${nextModel}'...`);
                 return callAI(prompt, retryCount + 1, nextModel);
